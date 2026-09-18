@@ -25,6 +25,7 @@ import (
 	"github.com/rulego/rulego"
 	"github.com/rulego/rulego/api/types"
 	"github.com/rulego/rulego/components/base"
+	"github.com/rulego/rulego/utils/el"
 	"github.com/rulego/rulego/utils/maps"
 	"github.com/rulego/rulego/utils/str"
 )
@@ -51,8 +52,8 @@ type GitLogNode struct {
 	// 节点配置
 	Config            GitLogNodeConfiguration
 	hasVar            bool
-	startTimeTemplate str.Template
-	endTimeTemplate   str.Template
+	startTimeTemplate el.Template
+	endTimeTemplate   el.Template
 }
 
 // Type 组件类型
@@ -70,16 +71,26 @@ func (x *GitLogNode) New() types.Node {
 func (x *GitLogNode) Init(ruleConfig types.Config, configuration types.Configuration) error {
 	err := maps.Map2Struct(configuration, &x.Config)
 	err = maps.Map2Struct(configuration, &x.baseGitNode.Config)
+	if err != nil {
+		return err
+	}
+	if err = x.baseGitNode.initTemplates(); err != nil {
+		return err
+	}
 	x.Config.StartTime = strings.TrimSpace(x.Config.StartTime)
 	x.Config.EndTime = strings.TrimSpace(x.Config.EndTime)
 
 	// 检查时间格式并格式化
-	x.startTimeTemplate = str.NewTemplate(x.Config.StartTime)
-	x.endTimeTemplate = str.NewTemplate(x.Config.EndTime)
-	if str.CheckHasVar(x.Config.StartTime) || str.CheckHasVar(x.Config.EndTime) {
+	if x.startTimeTemplate, err = el.NewTemplate(x.Config.StartTime); err != nil {
+		return err
+	}
+	if x.endTimeTemplate, err = el.NewTemplate(x.Config.EndTime); err != nil {
+		return err
+	}
+	if x.startTimeTemplate.HasVar() || x.endTimeTemplate.HasVar() {
 		x.hasVar = true
 	}
-	return err
+	return nil
 }
 
 // OnMsg 处理消息
@@ -91,8 +102,8 @@ func (x *GitLogNode) OnMsg(ctx types.RuleContext, msg types.RuleMsg) {
 	workDir := x.getWorkDir(msg, evn)
 	msg.Metadata.PutValue(KeyWorkDir, workDir)
 	// 动态解析配置
-	startTimeStr := x.startTimeTemplate.Execute(evn)
-	endTimeStr := x.endTimeTemplate.Execute(evn)
+	startTimeStr := x.startTimeTemplate.ExecuteAsString(evn)
+	endTimeStr := x.endTimeTemplate.ExecuteAsString(evn)
 
 	if startTimeStr != "" && len(startTimeStr) == 10 {
 		startTimeStr = startTimeStr + " 00:00:00"

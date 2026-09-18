@@ -25,7 +25,7 @@ import (
 	httptransport "github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/go-git/go-git/v5/plumbing/transport/ssh"
 	"github.com/rulego/rulego/api/types"
-	"github.com/rulego/rulego/utils/str"
+	"github.com/rulego/rulego/utils/el"
 	"net/http"
 	"strings"
 )
@@ -77,6 +77,29 @@ type baseGitNodeConfiguration struct {
 
 type baseGitNode struct {
 	Config baseGitNodeConfiguration
+
+	repositoryTemplate el.Template
+	directoryTemplate  el.Template
+	referenceTemplate  el.Template
+	refSpecsTemplate   el.Template
+}
+
+// initTemplates 在 Init 期解析固定配置中的 ${} 占位符，解析失败视为节点配置错误
+func (x *baseGitNode) initTemplates() error {
+	var err error
+	if x.repositoryTemplate, err = el.NewTemplate(x.Config.Repository); err != nil {
+		return err
+	}
+	if x.directoryTemplate, err = el.NewTemplate(x.Config.Directory); err != nil {
+		return err
+	}
+	if x.referenceTemplate, err = el.NewTemplate(x.Config.Reference); err != nil {
+		return err
+	}
+	if x.refSpecsTemplate, err = el.NewTemplate(x.Config.RefSpecs); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (x *baseGitNode) getAuthMethod() (transport.AuthMethod, error) {
@@ -115,7 +138,7 @@ func (x *baseGitNode) getWorkDir(msg types.RuleMsg, evn map[string]interface{}) 
 	if workDir == "" {
 		workDir = msg.Metadata.GetValue(KeyWorkDir)
 	} else if evn != nil {
-		workDir = str.ExecuteTemplate(workDir, evn)
+		workDir = x.directoryTemplate.ExecuteAsString(evn)
 	}
 	//workDir = path.Join(workDir, x.getRepoName(x.getRepository(msg, evn)))
 	return workDir
@@ -124,7 +147,7 @@ func (x *baseGitNode) getWorkDir(msg types.RuleMsg, evn map[string]interface{}) 
 func (x *baseGitNode) getRefSpecs(msg types.RuleMsg, evn map[string]interface{}) []config.RefSpec {
 	ref := x.Config.RefSpecs
 	if evn != nil {
-		ref = str.ExecuteTemplate(ref, evn)
+		ref = x.refSpecsTemplate.ExecuteAsString(evn)
 	}
 	values := strings.Split(ref, ",")
 	var refSpecs []config.RefSpec
@@ -143,7 +166,7 @@ func (x *baseGitNode) getRepository(msg types.RuleMsg, evn map[string]interface{
 			repository = msg.Metadata.GetValue(KeyGitHttpUrl)
 		}
 	} else if evn != nil {
-		repository = str.ExecuteTemplate(repository, evn)
+		repository = x.repositoryTemplate.ExecuteAsString(evn)
 	}
 	return repository
 }
@@ -153,7 +176,7 @@ func (x *baseGitNode) getReferenceName(msg types.RuleMsg, evn map[string]interfa
 	if ref == "" {
 		ref = msg.Metadata.GetValue(KeyRef)
 	} else if evn != nil {
-		ref = str.ExecuteTemplate(ref, evn)
+		ref = x.referenceTemplate.ExecuteAsString(evn)
 	}
 	return ref
 }

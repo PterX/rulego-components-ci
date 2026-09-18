@@ -23,8 +23,8 @@ import (
 	"github.com/rulego/rulego"
 	"github.com/rulego/rulego/api/types"
 	"github.com/rulego/rulego/components/base"
+	"github.com/rulego/rulego/utils/el"
 	"github.com/rulego/rulego/utils/maps"
-	"github.com/rulego/rulego/utils/str"
 	"time"
 )
 
@@ -50,6 +50,11 @@ type GitCommitNode struct {
 	// 节点配置
 	Config GitCommitNodeConfiguration
 	hasVar bool
+
+	patternTemplate     el.Template
+	messageTemplate     el.Template
+	authorNameTemplate  el.Template
+	authorEmailTemplate el.Template
 }
 
 // Type 组件类型
@@ -65,10 +70,29 @@ func (x *GitCommitNode) New() types.Node {
 func (x *GitCommitNode) Init(ruleConfig types.Config, configuration types.Configuration) error {
 	err := maps.Map2Struct(configuration, &x.Config)
 	err = maps.Map2Struct(configuration, &x.baseGitNode.Config)
-	if str.CheckHasVar(x.Config.Directory) || str.CheckHasVar(x.Config.Pattern) || str.CheckHasVar(x.Config.Signature.AuthorName) || str.CheckHasVar(x.Config.Signature.AuthorEmail) {
+	if err != nil {
+		return err
+	}
+	if err = x.baseGitNode.initTemplates(); err != nil {
+		return err
+	}
+	if x.patternTemplate, err = el.NewTemplate(x.Config.Pattern); err != nil {
+		return err
+	}
+	if x.messageTemplate, err = el.NewTemplate(x.Config.Message); err != nil {
+		return err
+	}
+	if x.authorNameTemplate, err = el.NewTemplate(x.Config.Signature.AuthorName); err != nil {
+		return err
+	}
+	if x.authorEmailTemplate, err = el.NewTemplate(x.Config.Signature.AuthorEmail); err != nil {
+		return err
+	}
+	if x.directoryTemplate.HasVar() || x.patternTemplate.HasVar() ||
+		x.authorNameTemplate.HasVar() || x.authorEmailTemplate.HasVar() {
 		x.hasVar = true
 	}
-	return err
+	return nil
 }
 
 // OnMsg 处理消息
@@ -134,7 +158,7 @@ func (x *GitCommitNode) Desc() string {
 func (x *GitCommitNode) getPattern(_ types.RuleMsg, evn map[string]interface{}) string {
 	pattern := x.Config.Pattern
 	if evn != nil {
-		pattern = str.ExecuteTemplate(pattern, evn)
+		pattern = x.patternTemplate.ExecuteAsString(evn)
 	}
 	return pattern
 }
@@ -142,7 +166,7 @@ func (x *GitCommitNode) getPattern(_ types.RuleMsg, evn map[string]interface{}) 
 func (x *GitCommitNode) getMessage(_ types.RuleMsg, evn map[string]interface{}) string {
 	message := x.Config.Message
 	if evn != nil {
-		message = str.ExecuteTemplate(message, evn)
+		message = x.messageTemplate.ExecuteAsString(evn)
 	}
 	return message
 }
@@ -150,7 +174,7 @@ func (x *GitCommitNode) getMessage(_ types.RuleMsg, evn map[string]interface{}) 
 func (x *GitCommitNode) getSignatureName(_ types.RuleMsg, evn map[string]interface{}) string {
 	name := x.Config.Signature.AuthorName
 	if evn != nil {
-		name = str.ExecuteTemplate(name, evn)
+		name = x.authorNameTemplate.ExecuteAsString(evn)
 	}
 	return name
 }
@@ -158,7 +182,7 @@ func (x *GitCommitNode) getSignatureName(_ types.RuleMsg, evn map[string]interfa
 func (x *GitCommitNode) getSignatureEmail(_ types.RuleMsg, evn map[string]interface{}) string {
 	email := x.Config.Signature.AuthorEmail
 	if evn != nil {
-		email = str.ExecuteTemplate(email, evn)
+		email = x.authorEmailTemplate.ExecuteAsString(evn)
 	}
 	return email
 }

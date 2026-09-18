@@ -22,8 +22,8 @@ import (
 	"github.com/rulego/rulego"
 	"github.com/rulego/rulego/api/types"
 	"github.com/rulego/rulego/components/base"
+	"github.com/rulego/rulego/utils/el"
 	"github.com/rulego/rulego/utils/maps"
-	"github.com/rulego/rulego/utils/str"
 	"time"
 )
 
@@ -49,6 +49,11 @@ type GitCreateTagNode struct {
 	// 节点配置
 	Config GitCreateTagNodeConfiguration
 	hasVar bool
+
+	tagTemplate         el.Template
+	messageTemplate     el.Template
+	authorNameTemplate  el.Template
+	authorEmailTemplate el.Template
 }
 
 // Type 组件类型
@@ -64,10 +69,29 @@ func (x *GitCreateTagNode) New() types.Node {
 func (x *GitCreateTagNode) Init(ruleConfig types.Config, configuration types.Configuration) error {
 	err := maps.Map2Struct(configuration, &x.Config)
 	err = maps.Map2Struct(configuration, &x.baseGitNode.Config)
-	if str.CheckHasVar(x.Config.Directory) || str.CheckHasVar(x.Config.Tag) || str.CheckHasVar(x.Config.Signature.AuthorName) || str.CheckHasVar(x.Config.Signature.AuthorEmail) {
+	if err != nil {
+		return err
+	}
+	if err = x.baseGitNode.initTemplates(); err != nil {
+		return err
+	}
+	if x.tagTemplate, err = el.NewTemplate(x.Config.Tag); err != nil {
+		return err
+	}
+	if x.messageTemplate, err = el.NewTemplate(x.Config.Message); err != nil {
+		return err
+	}
+	if x.authorNameTemplate, err = el.NewTemplate(x.Config.Signature.AuthorName); err != nil {
+		return err
+	}
+	if x.authorEmailTemplate, err = el.NewTemplate(x.Config.Signature.AuthorEmail); err != nil {
+		return err
+	}
+	if x.directoryTemplate.HasVar() || x.tagTemplate.HasVar() ||
+		x.authorNameTemplate.HasVar() || x.authorEmailTemplate.HasVar() {
 		x.hasVar = true
 	}
-	return err
+	return nil
 }
 
 // OnMsg 处理消息
@@ -127,7 +151,7 @@ func (x *GitCreateTagNode) Desc() string {
 func (x *GitCreateTagNode) getTag(_ types.RuleMsg, evn map[string]interface{}) string {
 	tag := x.Config.Tag
 	if evn != nil {
-		tag = str.ExecuteTemplate(tag, evn)
+		tag = x.tagTemplate.ExecuteAsString(evn)
 	}
 	return tag
 }
@@ -135,7 +159,7 @@ func (x *GitCreateTagNode) getTag(_ types.RuleMsg, evn map[string]interface{}) s
 func (x *GitCreateTagNode) getMessage(_ types.RuleMsg, evn map[string]interface{}) string {
 	message := x.Config.Message
 	if evn != nil {
-		message = str.ExecuteTemplate(message, evn)
+		message = x.messageTemplate.ExecuteAsString(evn)
 	}
 	return message
 }
@@ -143,7 +167,7 @@ func (x *GitCreateTagNode) getMessage(_ types.RuleMsg, evn map[string]interface{
 func (x *GitCreateTagNode) getSignatureName(_ types.RuleMsg, evn map[string]interface{}) string {
 	name := x.Config.Signature.AuthorName
 	if evn != nil {
-		name = str.ExecuteTemplate(name, evn)
+		name = x.authorNameTemplate.ExecuteAsString(evn)
 	}
 	return name
 }
@@ -151,7 +175,7 @@ func (x *GitCreateTagNode) getSignatureName(_ types.RuleMsg, evn map[string]inte
 func (x *GitCreateTagNode) getSignatureEmail(_ types.RuleMsg, evn map[string]interface{}) string {
 	email := x.Config.Signature.AuthorEmail
 	if evn != nil {
-		email = str.ExecuteTemplate(email, evn)
+		email = x.authorEmailTemplate.ExecuteAsString(evn)
 	}
 	return email
 }

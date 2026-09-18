@@ -22,7 +22,6 @@ import (
 	"github.com/rulego/rulego/api/types"
 	"github.com/rulego/rulego/components/base"
 	"github.com/rulego/rulego/utils/maps"
-	"github.com/rulego/rulego/utils/str"
 )
 
 func init() {
@@ -78,10 +77,16 @@ func (x *GitPushNode) New() types.Node {
 func (x *GitPushNode) Init(ruleConfig types.Config, configuration types.Configuration) error {
 	err := maps.Map2Struct(configuration, &x.Config)
 	err = maps.Map2Struct(configuration, &x.baseGitNode.Config)
-	if str.CheckHasVar(x.Config.Repository) || str.CheckHasVar(x.Config.Directory) || str.CheckHasVar(x.Config.RefSpecs) {
+	if err != nil {
+		return err
+	}
+	if err = x.baseGitNode.initTemplates(); err != nil {
+		return err
+	}
+	if x.repositoryTemplate.HasVar() || x.directoryTemplate.HasVar() || x.refSpecsTemplate.HasVar() {
 		x.hasVar = true
 	}
-	return err
+	return nil
 }
 
 // OnMsg 处理消息
